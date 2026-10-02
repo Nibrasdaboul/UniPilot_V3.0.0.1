@@ -77,10 +77,11 @@ try {
 
 await initDb();
 async function seedCollegeBootstrap() {
-  try {
-    const year = new Date().getFullYear();
-    const passwordHash = bcrypt.hashSync('College123!', 10);
+  const year = new Date().getFullYear();
+  const passwordHash = bcrypt.hashSync('College123!', 10);
 
+  // 1. إنشاء الحسابات الأساسية (العميد وشؤون الطلاب)
+  try {
     async function assignLogin(role, fullNameHint) {
       const row = await db.prepare(
         'SELECT id, person_code, full_name FROM users WHERE role = ? ORDER BY id ASC LIMIT 1'
@@ -110,7 +111,12 @@ async function seedCollegeBootstrap() {
         console.log(`Bootstrap student (${student.full_name}):`, demoStudentCode, '/ College123!');
       }
     }
+  } catch (e) {
+    console.warn('Users bootstrap error:', e.message);
+  }
 
+  // 2. إنشاء حساب شؤون الامتحانات
+  try {
     const examsRow = await db.prepare(`
       SELECT id, person_code, role, full_name FROM users
       WHERE role IN ('exams_office', 'exams_officer')
@@ -129,14 +135,24 @@ async function seedCollegeBootstrap() {
         console.log(`Bootstrap exams_office (${examsRow.full_name}):`, code, '/ College123!');
       }
     }
+  } catch (e) {
+    console.warn('Exams office bootstrap skipped:', e.message);
+  }
 
+  // 3. قاعات الامتحانات
+  try {
     const hallCount = await db.prepare('SELECT COUNT(*)::int AS n FROM exam_halls WHERE university_id = 1').get();
     if (!Number(hallCount?.n || 0)) {
       await db.prepare('INSERT INTO exam_halls (university_id, name, capacity, building) VALUES (1, ?, 80, ?)').run('قاعة 1', 'A');
       await db.prepare('INSERT INTO exam_halls (university_id, name, capacity, building) VALUES (1, ?, 40, ?)').run('قاعة 2', 'B');
       console.log('Bootstrap exam halls: قاعة 1 (80), قاعة 2 (40)');
     }
+  } catch (e) {
+    console.warn('Exam halls bootstrap skipped:', e.message);
+  }
 
+  // 4. الأساتذة والمشرفين
+  try {
     async function assignPreferred(role, preferred, hint) {
       const row = await db.prepare(
         'SELECT id, person_code, full_name FROM users WHERE role = ? AND college_id = 1 ORDER BY id ASC LIMIT 1'
@@ -151,7 +167,12 @@ async function seedCollegeBootstrap() {
     await assignPreferred('doctor', '0260000005', 'instructor');
     await assignPreferred('engineer', '0260000006', 'teaching_assistant');
     await assignPreferred('vice_dean_students', '0260000007', 'vice_dean_students');
+  } catch (e) {
+    console.warn('Preferred users bootstrap skipped:', e.message);
+  }
 
+  // 5. الأنشطة الطلابية والأقسام
+  try {
     const activityCount = await db.prepare('SELECT COUNT(*)::int AS n FROM student_activities WHERE college_id = 1').get();
     if (!Number(activityCount?.n || 0)) {
       const start = new Date(Date.now() + 7 * 86400_000);
@@ -168,9 +189,8 @@ async function seedCollegeBootstrap() {
     console.log(`Bootstrap departments: ${depts.map((d) => d.code).join(', ')}`);
     const synced = await syncCollegeCurriculum(1);
     console.log(`Bootstrap curriculum sync: ${synced.length} official catalog courses`);
-
   } catch (e) {
-    console.warn('College bootstrap skipped:', e.message);
+    console.warn('Activities/Curriculum bootstrap skipped:', e.message);
   }
 }
 
