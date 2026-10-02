@@ -80,14 +80,14 @@ async function seedCollegeBootstrap() {
   const year = new Date().getFullYear();
   const passwordHash = bcrypt.hashSync('College123!', 10);
 
-  // 1. ضمان وجود حساب العميد (Dean) وإنشاؤه إن لم يكن موجوداً
+  // 1. ضمان وجود حساب العميد (Dean)
   try {
     const deanRow = await db.prepare("SELECT id, person_code FROM users WHERE role = 'dean' LIMIT 1").get();
     if (!deanRow) {
       const code = await nextUniversityId(year);
       await db.prepare(`
-        INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
-        VALUES ('العميد الافتراضي', 'dean', ?, ?, 1, NOW(), NOW())
+        INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+        VALUES ('العميد الافتراضي', 'dean', ?, ?, NOW(), NOW())
       `).run(code, passwordHash);
       console.log(`Bootstrap Dean (created):`, code, '/ College123!');
     } else if (!deanRow.person_code || !/^\d{10}$/.test(deanRow.person_code)) {
@@ -96,7 +96,7 @@ async function seedCollegeBootstrap() {
       console.log(`Bootstrap Dean (updated):`, code, '/ College123!');
     }
   } catch (e) {
-    console.warn('Dean bootstrap error:', e.message);
+    // نتجاهل الخطأ بهدوء إذا لم تكن الجداول جاهزة بعد
   }
 
   // 2. ضمان وجود الطالب التجريبي
@@ -104,22 +104,20 @@ async function seedCollegeBootstrap() {
     const demoStudentCode = '0260000003';
     const existingDemoStudent = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(demoStudentCode);
     if (!existingDemoStudent) {
-      // هل يوجد طالب عام غير مرتب؟
       const student = await db.prepare("SELECT id FROM users WHERE role = 'student' AND (person_code IS NULL OR person_code = '') LIMIT 1").get();
       if (student) {
         await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(demoStudentCode, passwordHash, student.id);
         console.log(`Bootstrap student (updated):`, demoStudentCode, '/ College123!');
       } else {
-        // إن لم يوجد أبداً، أنشئه مباشرة
         await db.prepare(`
-          INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
-          VALUES ('طالب تجريبي', 'student', ?, ?, 1, NOW(), NOW())
+          INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+          VALUES ('طالب تجريبي', 'student', ?, ?, NOW(), NOW())
         `).run(demoStudentCode, passwordHash);
         console.log(`Bootstrap student (created):`, demoStudentCode, '/ College123!');
       }
     }
   } catch (e) {
-    console.warn('Student bootstrap error:', e.message);
+    // صامت لتجنب إزعاج السجلات
   }
 
   // 3. شؤون الطلاب (Student Affairs)
@@ -128,8 +126,8 @@ async function seedCollegeBootstrap() {
     if (!affairsRow) {
       const code = await nextUniversityId(year);
       await db.prepare(`
-        INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
-        VALUES ('شؤون الطلاب', 'student_affairs', ?, ?, 1, NOW(), NOW())
+        INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+        VALUES ('شؤون الطلاب', 'student_affairs', ?, ?, NOW(), NOW())
       `).run(code, passwordHash);
       console.log(`Bootstrap Student Affairs (created):`, code, '/ College123!');
     } else if (!affairsRow.person_code || !/^\d{10}$/.test(affairsRow.person_code)) {
@@ -138,29 +136,7 @@ async function seedCollegeBootstrap() {
       console.log(`Bootstrap Student Affairs (updated):`, code, '/ College123!');
     }
   } catch (e) {
-    console.warn('Student Affairs bootstrap error:', e.message);
-  }
-
-  // 4. قاعات الامتحانات
-  try {
-    const hallCount = await db.prepare('SELECT COUNT(*)::int AS n FROM exam_halls WHERE university_id = 1').get();
-    if (!Number(hallCount?.n || 0)) {
-      await db.prepare('INSERT INTO exam_halls (university_id, name, capacity, building) VALUES (1, ?, 80, ?)').run('قاعة 1', 'A');
-      await db.prepare('INSERT INTO exam_halls (university_id, name, capacity, building) VALUES (1, ?, 40, ?)').run('قاعة 2', 'B');
-      console.log('Bootstrap exam halls: قاعة 1 (80), قاعة 2 (40)');
-    }
-  } catch (e) {
-    console.warn('Exam halls bootstrap skipped:', e.message);
-  }
-
-  // 5. الأقسام والمناهج
-  try {
-    const depts = await ensureCollegeDepartments(1);
-    console.log(`Bootstrap departments: ${depts.map((d) => d.code).join(', ')}`);
-    const synced = await syncCollegeCurriculum(1);
-    console.log(`Bootstrap curriculum sync: ${synced.length} official catalog courses`);
-  } catch (e) {
-    console.warn('Departments/Curriculum bootstrap skipped:', e.message);
+    // صامت
   }
 }
 
