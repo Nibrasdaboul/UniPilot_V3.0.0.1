@@ -79,41 +79,40 @@ await initDb();
 
 async function seedCollegeBootstrap() {
   try {
-    // كود الاستعلام الحالي إن وجد هنا
+    const year = new Date().getFullYear();
+    const passwordHash = bcrypt.hashSync('College123!', 10);
+
+    async function assignLogin(role, fullNameHint) {
+      const row = await db.prepare(
+        'SELECT id, person_code, full_name FROM users WHERE role = ? ORDER BY id ASC LIMIT 1'
+      ).get(role);
+      if (!row) return null;
+      if (row.person_code && /^\d{10}$/.test(row.person_code)) return row.person_code;
+      const code = await nextUniversityId(year);
+      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, row.id);
+      console.log(`Bootstrap \({role} (\){row.full_name || fullNameHint}):`, code, '/ College123!');
+      return code;
+    }
+
+    await assignLogin(ROLES.DEAN, 'Dean');
+    await assignLogin(ROLES.STUDENT_AFFAIRS, 'Student Affairs');
+
+    const demoStudentCode = '0260000003';
+    const existingDemoStudent = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(demoStudentCode);
+    if (!existingDemoStudent) {
+      const student = await db.prepare(`
+        SELECT id, full_name FROM users
+        WHERE role = ? AND (person_code IS NULL OR person_code = '')
+        ORDER BY id ASC LIMIT 1
+      `).get(ROLES.STUDENT);
+      if (student) {
+        await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?')
+          .run(demoStudentCode, passwordHash, student.id);
+        console.log(`Bootstrap student (${student.full_name}):`, demoStudentCode, '/ College123!');
+      }
+    }
   } catch (e) {
     console.warn('College bootstrap skipped:', e.message);
-  }
-  const year = new Date().getFullYear();
-  const passwordHash = bcrypt.hashSync('College123!', 10);
-
-  async function assignLogin(role, fullNameHint) {
-    const row = await db.prepare(
-      'SELECT id, person_code, full_name FROM users WHERE role = ? ORDER BY id ASC LIMIT 1'
-    ).get(role);
-    if (!row) return null;
-    if (row.person_code && /^\d{10}$/.test(row.person_code)) return row.person_code;
-    const code = await nextUniversityId(year);
-    await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, row.id);
-    console.log(`Bootstrap \({role} (\){row.full_name || fullNameHint}):`, code, '/ College123!');
-    return code;
-  }
-
-  await assignLogin(ROLES.DEAN, 'Dean');
-  await assignLogin(ROLES.STUDENT_AFFAIRS, 'Student Affairs');
-
-  const demoStudentCode = '0260000003';
-  const existingDemoStudent = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(demoStudentCode);
-  if (!existingDemoStudent) {
-    const student = await db.prepare(`
-      SELECT id, full_name FROM users
-      WHERE role = ? AND (person_code IS NULL OR person_code = '')
-      ORDER BY id ASC LIMIT 1
-    `).get(ROLES.STUDENT);
-    if (student) {
-      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?')
-        .run(demoStudentCode, passwordHash, student.id);
-      console.log(`Bootstrap student (${student.full_name}):`, demoStudentCode, '/ College123!');
-    }
   }
 }
   const examsRow = await db.prepare(`
