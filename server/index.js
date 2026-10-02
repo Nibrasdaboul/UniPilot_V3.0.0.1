@@ -78,6 +78,11 @@ try {
 await initDb();
 
 async function seedCollegeBootstrap() {
+  try {
+    // كود الاستعلام الحالي الذي يسبب الخطأ
+  } catch (e) {
+    console.warn('College bootstrap skipped:', e.message);
+  }
   const year = new Date().getFullYear();
   const passwordHash = bcrypt.hashSync('College123!', 10);
 
