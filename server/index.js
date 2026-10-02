@@ -79,7 +79,7 @@ await initDb();
 
 async function seedCollegeBootstrap() {
   try {
-    // كود الاستعلام الحالي الذي يسبب الخطأ
+    // كود الاستعلام الحالي إن وجد هنا
   } catch (e) {
     console.warn('College bootstrap skipped:', e.message);
   }
@@ -94,7 +94,7 @@ async function seedCollegeBootstrap() {
     if (row.person_code && /^\d{10}$/.test(row.person_code)) return row.person_code;
     const code = await nextUniversityId(year);
     await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, row.id);
-    console.log(`Bootstrap ${role} (${row.full_name || fullNameHint}):`, code, '/ College123!');
+    console.log(`Bootstrap \({role} (\){row.full_name || fullNameHint}):`, code, '/ College123!');
     return code;
   }
 
@@ -106,7 +106,7 @@ async function seedCollegeBootstrap() {
   if (!existingDemoStudent) {
     const student = await db.prepare(`
       SELECT id, full_name FROM users
-      WHERE role = ? AND college_id IS NOT NULL AND (person_code IS NULL OR person_code = '')
+      WHERE role = ? AND (person_code IS NULL OR person_code = '')
       ORDER BY id ASC LIMIT 1
     `).get(ROLES.STUDENT);
     if (student) {
@@ -115,7 +115,7 @@ async function seedCollegeBootstrap() {
       console.log(`Bootstrap student (${student.full_name}):`, demoStudentCode, '/ College123!');
     }
   }
-
+}
   const examsRow = await db.prepare(`
     SELECT id, person_code, role, full_name FROM users
     WHERE role IN ('exams_office', 'exams_officer')
