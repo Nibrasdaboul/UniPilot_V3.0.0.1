@@ -80,66 +80,68 @@ async function seedCollegeBootstrap() {
   const year = new Date().getFullYear();
   const passwordHash = bcrypt.hashSync('College123!', 10);
 
-  // 1. إنشاء الحسابات الأساسية (العميد وشؤون الطلاب)
+  // 1. ضمان وجود حساب العميد (Dean) وإنشاؤه إن لم يكن موجوداً
   try {
-    async function assignLogin(role, fullNameHint) {
-      const row = await db.prepare(
-        'SELECT id, person_code, full_name FROM users WHERE role = ? ORDER BY id ASC LIMIT 1'
-      ).get(role);
-      if (!row) return null;
-      if (row.person_code && /^\d{10}$/.test(row.person_code)) return row.person_code;
+    const deanRow = await db.prepare("SELECT id, person_code FROM users WHERE role = 'dean' LIMIT 1").get();
+    if (!deanRow) {
       const code = await nextUniversityId(year);
-      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, row.id);
-      console.log(`Bootstrap \({role} (\){row.full_name || fullNameHint}):`, code, '/ College123!');
-      return code;
+      await db.prepare(`
+        INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
+        VALUES ('العميد الافتراضي', 'dean', ?, ?, 1, NOW(), NOW())
+      `).run(code, passwordHash);
+      console.log(`Bootstrap Dean (created):`, code, '/ College123!');
+    } else if (!deanRow.person_code || !/^\d{10}$/.test(deanRow.person_code)) {
+      const code = await nextUniversityId(year);
+      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, deanRow.id);
+      console.log(`Bootstrap Dean (updated):`, code, '/ College123!');
     }
+  } catch (e) {
+    console.warn('Dean bootstrap error:', e.message);
+  }
 
-    await assignLogin(ROLES.DEAN, 'Dean');
-    await assignLogin(ROLES.STUDENT_AFFAIRS, 'Student Affairs');
-
+  // 2. ضمان وجود الطالب التجريبي
+  try {
     const demoStudentCode = '0260000003';
     const existingDemoStudent = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(demoStudentCode);
     if (!existingDemoStudent) {
-      const student = await db.prepare(`
-        SELECT id, full_name FROM users
-        WHERE role = ? AND (person_code IS NULL OR person_code = '')
-        ORDER BY id ASC LIMIT 1
-      `).get(ROLES.STUDENT);
+      // هل يوجد طالب عام غير مرتب؟
+      const student = await db.prepare("SELECT id FROM users WHERE role = 'student' AND (person_code IS NULL OR person_code = '') LIMIT 1").get();
       if (student) {
-        await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?')
-          .run(demoStudentCode, passwordHash, student.id);
-        console.log(`Bootstrap student (${student.full_name}):`, demoStudentCode, '/ College123!');
+        await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(demoStudentCode, passwordHash, student.id);
+        console.log(`Bootstrap student (updated):`, demoStudentCode, '/ College123!');
+      } else {
+        // إن لم يوجد أبداً، أنشئه مباشرة
+        await db.prepare(`
+          INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
+          VALUES ('طالب تجريبي', 'student', ?, ?, 1, NOW(), NOW())
+        `).run(demoStudentCode, passwordHash);
+        console.log(`Bootstrap student (created):`, demoStudentCode, '/ College123!');
       }
     }
   } catch (e) {
-    console.warn('Users bootstrap error:', e.message);
+    console.warn('Student bootstrap error:', e.message);
   }
 
-  // 2. إنشاء حساب شؤون الامتحانات
+  // 3. شؤون الطلاب (Student Affairs)
   try {
-    const examsRow = await db.prepare(`
-      SELECT id, person_code, role, full_name FROM users
-      WHERE role IN ('exams_office', 'exams_officer')
-      ORDER BY id ASC LIMIT 1
-    `).get();
-    if (examsRow) {
-      if (examsRow.role !== ROLES.EXAMS_OFFICE) {
-        await db.prepare('UPDATE users SET role = ? WHERE id = ?').run(ROLES.EXAMS_OFFICE, examsRow.id);
-      }
-      if (!examsRow.person_code || !/^\d{10}$/.test(examsRow.person_code)) {
-        const preferred = '0260000004';
-        const taken = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(preferred);
-        const code = taken && Number(taken.id) !== Number(examsRow.id) ? await nextUniversityId(year) : preferred;
-        await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?')
-          .run(code, passwordHash, examsRow.id);
-        console.log(`Bootstrap exams_office (${examsRow.full_name}):`, code, '/ College123!');
-      }
+    const affairsRow = await db.prepare("SELECT id, person_code FROM users WHERE role = 'student_affairs' LIMIT 1").get();
+    if (!affairsRow) {
+      const code = await nextUniversityId(year);
+      await db.prepare(`
+        INSERT INTO users (full_name, role, person_code, password_hash, college_id, created_at, updated_at)
+        VALUES ('شؤون الطلاب', 'student_affairs', ?, ?, 1, NOW(), NOW())
+      `).run(code, passwordHash);
+      console.log(`Bootstrap Student Affairs (created):`, code, '/ College123!');
+    } else if (!affairsRow.person_code || !/^\d{10}$/.test(affairsRow.person_code)) {
+      const code = await nextUniversityId(year);
+      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, affairsRow.id);
+      console.log(`Bootstrap Student Affairs (updated):`, code, '/ College123!');
     }
   } catch (e) {
-    console.warn('Exams office bootstrap skipped:', e.message);
+    console.warn('Student Affairs bootstrap error:', e.message);
   }
 
-  // 3. قاعات الامتحانات
+  // 4. قاعات الامتحانات
   try {
     const hallCount = await db.prepare('SELECT COUNT(*)::int AS n FROM exam_halls WHERE university_id = 1').get();
     if (!Number(hallCount?.n || 0)) {
@@ -151,50 +153,19 @@ async function seedCollegeBootstrap() {
     console.warn('Exam halls bootstrap skipped:', e.message);
   }
 
-  // 4. الأساتذة والمشرفين
+  // 5. الأقسام والمناهج
   try {
-    async function assignPreferred(role, preferred, hint) {
-      const row = await db.prepare(
-        'SELECT id, person_code, full_name FROM users WHERE role = ? AND college_id = 1 ORDER BY id ASC LIMIT 1'
-      ).get(role);
-      if (!row) return;
-      if (row.person_code && /^\d{10}$/.test(row.person_code)) return;
-      const taken = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(preferred);
-      const code = taken && Number(taken.id) !== Number(row.id) ? await nextUniversityId(year) : preferred;
-      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, row.id);
-      console.log(`Bootstrap \({hint} (\){row.full_name}):`, code, '/ College123!');
-    }
-    await assignPreferred('doctor', '0260000005', 'instructor');
-    await assignPreferred('engineer', '0260000006', 'teaching_assistant');
-    await assignPreferred('vice_dean_students', '0260000007', 'vice_dean_students');
-  } catch (e) {
-    console.warn('Preferred users bootstrap skipped:', e.message);
-  }
-
-  // 5. الأنشطة الطلابية والأقسام
-  try {
-    const activityCount = await db.prepare('SELECT COUNT(*)::int AS n FROM student_activities WHERE college_id = 1').get();
-    if (!Number(activityCount?.n || 0)) {
-      const start = new Date(Date.now() + 7 * 86400_000);
-      start.setHours(10, 0, 0, 0);
-      const end = new Date(start.getTime() + 2 * 3600_000);
-      await db.prepare(`
-        INSERT INTO student_activities (college_id, title, description, location, starts_at, ends_at, capacity)
-        VALUES (1, ?, ?, ?, ?, ?, 80)
-      `).run('يوم تعريف الكلية', 'نشاط تجريبي من شؤون الطلاب', 'قاعة 1', start.toISOString(), end.toISOString());
-      console.log('Bootstrap student activity: يوم تعريف الكلية');
-    }
-
     const depts = await ensureCollegeDepartments(1);
     console.log(`Bootstrap departments: ${depts.map((d) => d.code).join(', ')}`);
     const synced = await syncCollegeCurriculum(1);
     console.log(`Bootstrap curriculum sync: ${synced.length} official catalog courses`);
   } catch (e) {
-    console.warn('Activities/Curriculum bootstrap skipped:', e.message);
+    console.warn('Departments/Curriculum bootstrap skipped:', e.message);
   }
 }
 
 await seedCollegeBootstrap();
+
 // Recalculate final mark for a student_course from grade_items and update student_courses.current_grade
 async function recalcCourseGrade(studentCourseId) {
   const items = await db.prepare('SELECT score, max_score, weight FROM grade_items WHERE student_course_id = ?').all(studentCourseId);
