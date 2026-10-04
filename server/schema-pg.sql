@@ -3,11 +3,18 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE,
   password_hash TEXT NOT NULL,
   full_name TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'student')),
+  role TEXT NOT NULL DEFAULT 'student' CHECK (role IN ('admin', 'student', 'dean', 'student_affairs', 'teaching_staff', 'exams_office')),
+  person_code TEXT UNIQUE,
+  university_id TEXT UNIQUE,
+  college_id INTEGER,
+  department_id INTEGER,
+  enrollment_year INTEGER,
+  avatar_url TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   terms_accepted_at TIMESTAMPTZ
 );
 
@@ -40,6 +47,8 @@ CREATE TABLE IF NOT EXISTS student_courses (
   finalized_at TIMESTAMPTZ,
   passed INTEGER,
   semester_id INTEGER,
+  withdrawn INTEGER NOT NULL DEFAULT 0,
+  withdrawn_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(user_id, catalog_course_id)
 );
@@ -49,6 +58,7 @@ CREATE INDEX IF NOT EXISTS idx_student_courses_catalog ON student_courses(catalo
 CREATE INDEX IF NOT EXISTS idx_catalog_order ON catalog_courses("order");
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+CREATE INDEX IF NOT EXISTS idx_users_person_code ON users(person_code);
 
 CREATE TABLE IF NOT EXISTS grade_items (
   id SERIAL PRIMARY KEY,
@@ -283,6 +293,7 @@ CREATE TABLE IF NOT EXISTS student_semesters (
   name TEXT NOT NULL,
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_current INTEGER NOT NULL DEFAULT 0,
+  is_ended INTEGER NOT NULL DEFAULT 0,
   app_rating TEXT,
   created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
