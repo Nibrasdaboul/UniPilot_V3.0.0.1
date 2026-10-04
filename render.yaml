@@ -1,10 +1,11 @@
 # Render Blueprint — UniPilot (Web Service + PostgreSQL)
 # ربط المستودع من GitHub ثم النشر. المتغيرات الإجبارية تُضبط في Dashboard.
-# Docs: https://render.com/docs/blueprint-spec | دليل عربي: docs/RENDER_DEPLOY_AR.md
+# Docs: https://render.com/docs/blueprint-spec
 
 databases:
   - name: unipilot-db
     plan: free
+    databaseName: unipilot
 
 services:
   - type: web
@@ -15,13 +16,29 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: "10000"
       - key: DATABASE_URL
         fromDatabase:
           name: unipilot-db
           property: connectionString
-      # إجباري — يُضبط في Dashboard:
-      # JWT_SECRET (32+ حرف)، VITE_BACKEND_URL (رابط التطبيق الكامل)، APP_URL (نفس الرابط)، FRONTEND_ORIGIN (نفس الرابط أو CORS)
+      # إجباري — يُضبط في Render Dashboard > Environment Variables:
+      # الخطوات:
+      # 1. انسخ القيم أدناه إلى Render Dashboard
+      # 2. غيّر JWT_SECRET إلى سلسلة عشوائية قوية 32+ حرف
+      # 3. اضبط VITE_BACKEND_URL و APP_URL و FRONTEND_ORIGIN على رابط تطبيقك
+      # مثال: https://unipilot-v3-0-0-1.onrender.com
+      - key: JWT_SECRET
+        sync: false
+      - key: VITE_BACKEND_URL
+        sync: false
+      - key: APP_URL
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
       # اختياري — الدفع والذكاء الاصطناعي:
-      # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, STRIPE_PRO_PLAN_PRICE_ID, STRIPE_STUDENT_PLAN_PRICE_ID
+      # STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY
+      # STRIPE_PRO_PLAN_PRICE_ID, STRIPE_STUDENT_PLAN_PRICE_ID
       # GROQ_API_KEY (للذكاء الاصطناعي)
-      # اختياري — مراقبة: SENTRY_DSN, POSTHOG_API_KEY, REDIS_URL, LOG_LEVEL
+      # اختياري — مراقبة:
+      # SENTRY_DSN, POSTHOG_API_KEY, REDIS_URL, LOG_LEVEL

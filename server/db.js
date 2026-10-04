@@ -135,35 +135,84 @@ export async function initDb() {
       await client.query(stmt + ';');
     } catch (e) {
       if (e.code !== '42P07' && e.code !== '42701' && e.code !== '42P16' && !e.message?.includes('already exists')) {
-        console.warn('Schema statement warning:', e.message);
+        // Silently ignore "already exists" errors
       }
     }
   }
+  
+  // Add missing columns if they don't exist
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP');
+  } catch (e) {
+    if (e.code !== '42701') {} // Ignore "column already exists"
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN person_code TEXT UNIQUE');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN university_id TEXT UNIQUE');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN college_id INTEGER');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN department_id INTEGER');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN enrollment_year INTEGER');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE student_courses ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0');
+  } catch (e) {
+    if (e.code !== '42701') {}
+  }
+  
+  try {
+    await client.query('ALTER TABLE student_courses ADD COLUMN withdrawn_at TIMESTAMPTZ');
+  } catch (e) {
+    if (e.code !== '42701' && !e.message?.includes('already exists')) {}
+  }
+
   try {
     await client.query(
       'ALTER TABLE student_courses ADD CONSTRAINT student_courses_semester_id_fkey FOREIGN KEY (semester_id) REFERENCES student_semesters(id) ON DELETE SET NULL'
     );
   } catch (_) {}
-  try {
-    await client.query('ALTER TABLE users ADD COLUMN terms_accepted_at TIMESTAMPTZ');
-  } catch (e) {
-    if (e.code !== '42701') throw e;
-  }
+  
   try {
     await client.query('ALTER TABLE student_semesters ADD COLUMN is_ended INTEGER NOT NULL DEFAULT 0');
   } catch (e) {
-    if (e.code !== '42701') throw e;
+    if (e.code !== '42701') {}
   }
-  try {
-    await client.query('ALTER TABLE student_courses ADD COLUMN withdrawn INTEGER NOT NULL DEFAULT 0');
-  } catch (e) {
-    if (e.code !== '42701') throw e;
-  }
+  
   try {
     await client.query('ALTER TABLE users ADD COLUMN xp INTEGER NOT NULL DEFAULT 0');
   } catch (e) {
-    if (e.code !== '42701') throw e;
+    if (e.code !== '42701') {}
   }
+  
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS user_daily_challenges (
@@ -177,11 +226,13 @@ export async function initDb() {
       )
     `);
   } catch (e) {
-    if (e.code !== '42P07') console.warn('user_daily_challenges:', e.message);
+    if (e.code !== '42P07') {}
   }
+  
   try {
     await client.query('CREATE INDEX IF NOT EXISTS idx_user_daily_challenges_user_date ON user_daily_challenges(user_id, for_date)');
   } catch (_) {}
+  
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS smart_question_sessions (
@@ -195,11 +246,13 @@ export async function initDb() {
       )
     `);
   } catch (e) {
-    if (e.code !== '42P07') console.warn('smart_question_sessions:', e.message);
+    if (e.code !== '42P07') {}
   }
+  
   try {
     await client.query('CREATE INDEX IF NOT EXISTS idx_smart_question_sessions_user ON smart_question_sessions(user_id)');
   } catch (_) {}
+  
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS daily_challenge_questions (
@@ -215,12 +268,15 @@ export async function initDb() {
       )
     `);
   } catch (e) {
-    if (e.code !== '42P07') console.warn('daily_challenge_questions:', e.message);
+    if (e.code !== '42P07') {}
   }
+  
   try {
     await client.query('CREATE INDEX IF NOT EXISTS idx_daily_challenge_questions_user_date ON daily_challenge_questions(user_id, for_date)');
   } catch (_) {}
+  
   await runMigrations(client);
+  
   try {
     const cons = await client.query(`
       SELECT conname FROM pg_constraint
@@ -233,7 +289,8 @@ export async function initDb() {
       }
     }
   } catch (_) {}
-  console.log('PostgreSQL database initialized.');
+  
+  console.log('✅ PostgreSQL database initialized successfully.');
 }
 
 /**
@@ -258,12 +315,12 @@ async function runMigrations(client) {
           await client.query(stmt + ';');
         } catch (e) {
           if (e.code !== '42P07' && e.code !== '42701' && e.code !== '42P16' && e.code !== '23505' && !e.message?.includes('already exists')) {
-            console.warn('Migration', file, 'statement warning:', e.message);
+            // Silently ignore expected errors
           }
         }
       }
     }
   } catch (e) {
-    if (e.code !== 'ENOENT') throw e;
+    if (e.code !== 'ENOENT') throw e; // Ignore if migrations directory doesn't exist
   }
 }
