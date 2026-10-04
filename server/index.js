@@ -76,68 +76,109 @@ try {
 } catch (_) {}
 
 await initDb();
+
 async function seedCollegeBootstrap() {
   const year = new Date().getFullYear();
   const passwordHash = bcrypt.hashSync('College123!', 10);
+  const now = new Date().toISOString();
+
+  console.log('🌱 Starting college bootstrap...');
 
   // 1. ضمان وجود حساب العميد (Dean)
   try {
     const deanRow = await db.prepare("SELECT id, person_code FROM users WHERE role = 'dean' LIMIT 1").get();
     if (!deanRow) {
-      const code = await nextUniversityId(year);
-      await db.prepare(`
-        INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
-        VALUES ('العميد الافتراضي', 'dean', ?, ?, NOW(), NOW())
-      `).run(code, passwordHash);
-      console.log(`Bootstrap Dean (created):`, code, '/ College123!');
+      try {
+        const code = await nextUniversityId(year);
+        await db.prepare(`
+          INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+          VALUES (?, 'dean', ?, ?, ?, ?)
+        `).run('العميد الافتراضي', code, passwordHash, now, now);
+        console.log(`✅ Bootstrap Dean (created):`, code, '/ College123!');
+      } catch (innerE) {
+        console.warn('⚠️ Could not create Dean:', innerE.message);
+      }
     } else if (!deanRow.person_code || !/^\d{10}$/.test(deanRow.person_code)) {
-      const code = await nextUniversityId(year);
-      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, deanRow.id);
-      console.log(`Bootstrap Dean (updated):`, code, '/ College123!');
+      try {
+        const code = await nextUniversityId(year);
+        await db.prepare('UPDATE users SET person_code = ?, password_hash = ?, updated_at = ? WHERE id = ?').run(code, passwordHash, now, deanRow.id);
+        console.log(`✅ Bootstrap Dean (updated):`, code, '/ College123!');
+      } catch (innerE) {
+        console.warn('⚠️ Could not update Dean:', innerE.message);
+      }
+    } else {
+      console.log(`ℹ️ Dean already exists:`, deanRow.person_code);
     }
   } catch (e) {
-    // نتجاهل الخطأ بهدوء إذا لم تكن الجداول جاهزة بعد
+    console.warn('⚠️ Dean bootstrap error:', e.message);
   }
 
   // 2. ضمان وجود الطالب التجريبي
   try {
     const demoStudentCode = '0260000003';
     const existingDemoStudent = await db.prepare('SELECT id FROM users WHERE person_code = ?').get(demoStudentCode);
+    
     if (!existingDemoStudent) {
+      // Try to find and update an existing student with null person_code
       const student = await db.prepare("SELECT id FROM users WHERE role = 'student' AND (person_code IS NULL OR person_code = '') LIMIT 1").get();
+      
       if (student) {
-        await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(demoStudentCode, passwordHash, student.id);
-        console.log(`Bootstrap student (updated):`, demoStudentCode, '/ College123!');
+        try {
+          await db.prepare('UPDATE users SET person_code = ?, password_hash = ?, updated_at = ? WHERE id = ?').run(demoStudentCode, passwordHash, now, student.id);
+          console.log(`✅ Bootstrap student (updated):`, demoStudentCode, '/ College123!');
+        } catch (innerE) {
+          console.warn('⚠️ Could not update student:', innerE.message);
+        }
       } else {
-        await db.prepare(`
-          INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
-          VALUES ('طالب تجريبي', 'student', ?, ?, NOW(), NOW())
-        `).run(demoStudentCode, passwordHash);
-        console.log(`Bootstrap student (created):`, demoStudentCode, '/ College123!');
+        // Create a new student
+        try {
+          await db.prepare(`
+            INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+            VALUES (?, 'student', ?, ?, ?, ?)
+          `).run('طالب تجريبي', demoStudentCode, passwordHash, now, now);
+          console.log(`✅ Bootstrap student (created):`, demoStudentCode, '/ College123!');
+        } catch (innerE) {
+          console.warn('⚠️ Could not create student:', innerE.message);
+        }
       }
+    } else {
+      console.log(`ℹ️ Demo student already exists:`, demoStudentCode);
     }
   } catch (e) {
-    // صامت لتجنب إزعاج السجلات
+    console.warn('⚠️ Student bootstrap error:', e.message);
   }
 
   // 3. شؤون الطلاب (Student Affairs)
   try {
     const affairsRow = await db.prepare("SELECT id, person_code FROM users WHERE role = 'student_affairs' LIMIT 1").get();
+    
     if (!affairsRow) {
-      const code = await nextUniversityId(year);
-      await db.prepare(`
-        INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
-        VALUES ('شؤون الطلاب', 'student_affairs', ?, ?, NOW(), NOW())
-      `).run(code, passwordHash);
-      console.log(`Bootstrap Student Affairs (created):`, code, '/ College123!');
+      try {
+        const code = await nextUniversityId(year);
+        await db.prepare(`
+          INSERT INTO users (full_name, role, person_code, password_hash, created_at, updated_at)
+          VALUES (?, 'student_affairs', ?, ?, ?, ?)
+        `).run('شؤون الطلاب', code, passwordHash, now, now);
+        console.log(`✅ Bootstrap Student Affairs (created):`, code, '/ College123!');
+      } catch (innerE) {
+        console.warn('⚠️ Could not create Student Affairs:', innerE.message);
+      }
     } else if (!affairsRow.person_code || !/^\d{10}$/.test(affairsRow.person_code)) {
-      const code = await nextUniversityId(year);
-      await db.prepare('UPDATE users SET person_code = ?, password_hash = ? WHERE id = ?').run(code, passwordHash, affairsRow.id);
-      console.log(`Bootstrap Student Affairs (updated):`, code, '/ College123!');
+      try {
+        const code = await nextUniversityId(year);
+        await db.prepare('UPDATE users SET person_code = ?, password_hash = ?, updated_at = ? WHERE id = ?').run(code, passwordHash, now, affairsRow.id);
+        console.log(`✅ Bootstrap Student Affairs (updated):`, code, '/ College123!');
+      } catch (innerE) {
+        console.warn('⚠️ Could not update Student Affairs:', innerE.message);
+      }
+    } else {
+      console.log(`ℹ️ Student Affairs already exists:`, affairsRow.person_code);
     }
   } catch (e) {
-    // صامت
+    console.warn('⚠️ Student Affairs bootstrap error:', e.message);
   }
+
+  console.log('✅ College bootstrap completed');
 }
 
 await seedCollegeBootstrap();
